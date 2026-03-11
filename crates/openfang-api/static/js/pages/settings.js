@@ -34,6 +34,8 @@ function settingsPage() {
     loading: true,
     loadError: '',
 
+    get settingsLoading() { return this.loading; },
+
     // -- Dynamic config state --
     configSchema: null,
     configValues: {},

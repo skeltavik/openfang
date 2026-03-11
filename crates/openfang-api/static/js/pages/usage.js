@@ -127,7 +127,9 @@ function analyticsPage() {
     costByProvider() {
       var providerMap = {};
       var self = this;
+      if (!this.byModel || !Array.isArray(this.byModel)) return [];
       this.byModel.forEach(function(m) {
+        if (!m) return;
         var provider = self._extractProvider(m.model);
         if (!providerMap[provider]) {
           providerMap[provider] = { provider: provider, cost: 0, tokens: 0, calls: 0 };
@@ -168,18 +170,21 @@ function analyticsPage() {
       var providers = this.costByProvider();
       var total = 0;
       var colors = this._chartColors;
-      providers.forEach(function(p) { total += p.cost; });
+      if (!providers || !Array.isArray(providers)) return [];
+      providers.forEach(function(p) { total += (p && p.cost) || 0; });
       if (total === 0) return [];
 
       var segments = [];
       var offset = 0;
       var circumference = 2 * Math.PI * 60; // r=60
       for (var i = 0; i < providers.length; i++) {
-        var pct = providers[i].cost / total;
+        var p = providers[i];
+        if (!p || !p.cost) continue;
+        var pct = p.cost / total;
         var dashLen = pct * circumference;
         segments.push({
-          provider: providers[i].provider,
-          cost: providers[i].cost,
+          provider: p.provider || 'Unknown',
+          cost: p.cost,
           percent: Math.round(pct * 100),
           color: colors[i % colors.length],
           dasharray: dashLen + ' ' + (circumference - dashLen),
@@ -195,23 +200,28 @@ function analyticsPage() {
 
     barChartData() {
       var days = this.dailyCosts;
-      if (!days || days.length === 0) return [];
+      if (!days || !Array.isArray(days) || days.length === 0) return [];
       var maxCost = 0;
-      days.forEach(function(d) { if (d.cost_usd > maxCost) maxCost = d.cost_usd; });
+      days.forEach(function(d) { 
+        if (d && d.cost_usd && d.cost_usd > maxCost) maxCost = d.cost_usd; 
+      });
       if (maxCost === 0) maxCost = 1;
 
       var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       var result = [];
       for (var i = 0; i < days.length; i++) {
-        var d = new Date(days[i].date + 'T12:00:00');
+        var day = days[i];
+        if (!day || !day.date) continue;
+        var d = new Date(day.date + 'T12:00:00');
         var dayName = dayNames[d.getDay()] || '?';
-        var heightPct = Math.max(2, Math.round((days[i].cost_usd / maxCost) * 120));
+        var cost = day.cost_usd || 0;
+        var heightPct = Math.max(2, Math.round((cost / maxCost) * 120));
         result.push({
-          date: days[i].date,
+          date: day.date,
           dayName: dayName,
-          cost: days[i].cost_usd,
-          tokens: days[i].tokens,
-          calls: days[i].calls,
+          cost: cost,
+          tokens: day.tokens || 0,
+          calls: day.calls || 0,
           barHeight: heightPct
         });
       }

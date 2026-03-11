@@ -2990,10 +2990,10 @@ args = ["-y", "@modelcontextprotocol/server-filesystem", "/path"]</pre>
                   <div class="text-xs text-dim mt-2" x-show="p.api_key_env" x-text="'Env: ' + p.api_key_env"></div>
                   <!-- Key input for unconfigured providers -->
                   <template x-if="p.auth_status !== 'configured' && p.api_key_env">
-                    <div class="key-input-group">
+                    <form class="key-input-group" @submit.prevent="saveProviderKey(p)">
                       <input type="password" :placeholder="'Enter ' + p.api_key_env" x-model="providerKeyInputs[p.id]">
-                      <button class="btn btn-primary btn-sm" @click="saveProviderKey(p)">Save</button>
-                    </div>
+                      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                    </form>
                   </template>
                   <template x-if="p.auth_status !== 'configured' && p.api_key_env">
                     <div class="text-xs text-dim mt-2">Or set <code style="color:var(--accent-light);background:var(--bg);padding:1px 4px;border-radius:2px" x-text="p.api_key_env"></code> in your environment and restart</div>
@@ -3044,7 +3044,7 @@ args = ["-y", "@modelcontextprotocol/server-filesystem", "/path"]</pre>
               </template>
             </div>
             <!-- Add Custom Provider -->
-            <div class="info-card mt-4" style="border:1px solid var(--border)">
+            <form class="info-card mt-4" style="border:1px solid var(--border)" @submit.prevent="addCustomProvider()">
               <h4 style="margin-top:0">Add Custom Provider</h4>
               <p class="text-xs text-dim mb-2">Connect any OpenAI-compatible API (vLLM, LiteLLM, LocalAI, etc.)</p>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
@@ -3061,12 +3061,12 @@ args = ["-y", "@modelcontextprotocol/server-filesystem", "/path"]</pre>
                 <label class="text-xs text-dim">API Key (optional)</label>
                 <input class="form-input" type="password" x-model="customProviderKey" placeholder="sk-... (leave blank if not needed)">
               </div>
-              <button class="btn btn-primary btn-sm mt-2" @click="addCustomProvider()" :disabled="!customProviderName.trim() || !customProviderUrl.trim() || addingCustomProvider">
+              <button type="submit" class="btn btn-primary btn-sm mt-2" :disabled="!customProviderName.trim() || !customProviderUrl.trim() || addingCustomProvider">
                 <span x-show="!addingCustomProvider">Add Provider</span>
                 <span x-show="addingCustomProvider" class="spinner" style="width:10px;height:10px;border-width:2px"></span>
               </button>
               <span class="text-xs text-dim ml-2" x-text="customProviderStatus"></span>
-            </div>
+            </form>
             <div class="empty-state" x-show="!providers.length">
               <h4>No providers found</h4>
               <p class="hint">Provider information could not be loaded. Check that the API is running.</p>
@@ -3791,7 +3791,7 @@ args = ["-y", "@modelcontextprotocol/server-filesystem", "/path"]</pre>
               <div class="card cost-chart-panel">
                 <div class="card-header">Cost by Provider</div>
                 <div x-show="costByProvider().length === 0" class="text-sm text-dim" style="padding:20px;text-align:center">No cost data yet.</div>
-                <div x-show="costByProvider().length > 0" class="donut-chart-wrap">
+                <template x-if="costByProvider().length > 0 && donutSegments().length > 0">
                   <div class="donut-chart">
                     <svg viewBox="0 0 160 160" width="160" height="160">
                       <template x-for="(seg, idx) in donutSegments()" :key="seg.provider">
@@ -3824,13 +3824,13 @@ args = ["-y", "@modelcontextprotocol/server-filesystem", "/path"]</pre>
                     </template>
                   </div>
                 </div>
-              </div>
+                </template>
 
               <!-- Bar Chart: Daily Cost (last 7 days) -->
               <div class="card cost-chart-panel">
                 <div class="card-header">Daily Cost (Last 7 Days)</div>
                 <div x-show="barChartData().length === 0" class="text-sm text-dim" style="padding:20px;text-align:center">No daily data yet.</div>
-                <div x-show="barChartData().length > 0" class="bar-chart">
+                <template x-if="barChartData().length > 0">
                   <svg :viewBox="'0 0 ' + (barChartData().length * 50 + 20) + ' 180'" :width="barChartData().length * 50 + 20" height="180">
                     <!-- Baseline -->
                     <line x1="10" :x2="barChartData().length * 50 + 10" y1="150" y2="150" stroke="var(--border)" stroke-width="1"/>
@@ -3869,9 +3869,9 @@ args = ["-y", "@modelcontextprotocol/server-filesystem", "/path"]</pre>
                         ></text>
                       </g>
                     </template>
-                  </svg>
-                </div>
-              </div>
+                   </svg>
+                 </template>
+               </div>
             </div>
 
             <!-- Cost by Model Table -->
@@ -4497,13 +4497,13 @@ args = ["-y", "@modelcontextprotocol/server-filesystem", "/path"]</pre>
                   </div>
                   <div class="form-group">
                     <label>API Key</label>
-                    <div class="key-input-group">
-                      <input type="password" :placeholder="'Enter your ' + selectedProviderObj.display_name + ' API key'" x-model="apiKeyInput" @keydown.enter="saveKey()">
-                      <button class="btn btn-primary btn-sm" @click="saveKey()" :disabled="savingKey || !apiKeyInput.trim()">
+                    <form class="key-input-group" @submit.prevent="saveKey()">
+                      <input type="password" :placeholder="'Enter your ' + selectedProviderObj.display_name + ' API key'" x-model="apiKeyInput">
+                      <button type="submit" class="btn btn-primary btn-sm" :disabled="savingKey || !apiKeyInput.trim()">
                         <span x-show="!savingKey">Save &amp; Test</span>
                         <span x-show="savingKey" class="spinner" style="width:10px;height:10px;border-width:2px"></span>
                       </button>
-                    </div>
+                    </form>
                   </div>
                   <div x-show="testResult" class="mt-2">
                     <div x-show="testResult && testResult.status === 'ok'" class="badge badge-success" style="padding:6px 12px">Connected successfully<span x-show="testResult && testResult.latency_ms" x-text="' (' + (testResult ? testResult.latency_ms : '') + 'ms)'"></span></div>
@@ -4656,13 +4656,13 @@ args = ["-y", "@modelcontextprotocol/server-filesystem", "/path"]</pre>
                   <div class="text-xs text-dim mb-2" x-text="selectedChannelObj.help"></div>
                   <div class="form-group">
                     <label x-text="selectedChannelObj.token_label"></label>
-                    <div class="key-input-group">
-                      <input type="password" :placeholder="selectedChannelObj.token_placeholder" x-model="channelToken" @keydown.enter="configureChannel()">
-                      <button class="btn btn-primary btn-sm" @click="configureChannel()" :disabled="configuringChannel || !channelToken.trim()">
+                    <form class="key-input-group" @submit.prevent="configureChannel()">
+                      <input type="password" :placeholder="selectedChannelObj.token_placeholder" x-model="channelToken">
+                      <button type="submit" class="btn btn-primary btn-sm" :disabled="configuringChannel || !channelToken.trim()">
                         <span x-show="!configuringChannel">Save</span>
                         <span x-show="configuringChannel" class="spinner" style="width:10px;height:10px;border-width:2px"></span>
                       </button>
-                    </div>
+                    </form>
                   </div>
                   <div class="text-xs text-dim" x-text="'Or set ' + selectedChannelObj.token_env + ' in your environment'"></div>
                   <div x-show="channelConfigured" class="mt-2">
