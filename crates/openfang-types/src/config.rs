@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Deserialize a `Vec<String>` that tolerates both string and integer elements.
 ///
@@ -1097,32 +1098,113 @@ pub struct OAuthConfig {
 /// Global spending budget configuration.
 ///
 /// Set limits to 0.0 for unlimited. All limits apply across all agents.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Uses atomic storage for thread-safe updates without unsafe code.
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct BudgetConfig {
     /// Maximum total cost in USD per hour (0.0 = unlimited).
-    pub max_hourly_usd: f64,
+    /// Stored as atomic u64 for thread-safe updates (f64 bits).
+    #[serde(skip)]
+    pub(crate) max_hourly_usd: AtomicU64,
     /// Maximum total cost in USD per day (0.0 = unlimited).
-    pub max_daily_usd: f64,
+    /// Stored as atomic u64 for thread-safe updates (f64 bits).
+    #[serde(skip)]
+    pub(crate) max_daily_usd: AtomicU64,
     /// Maximum total cost in USD per month (0.0 = unlimited).
-    pub max_monthly_usd: f64,
+    /// Stored as atomic u64 for thread-safe updates (f64 bits).
+    #[serde(skip)]
+    pub(crate) max_monthly_usd: AtomicU64,
     /// Alert threshold as a fraction (0.0 - 1.0). Trigger warnings at this % of any limit.
-    pub alert_threshold: f64,
+    /// Stored as atomic u64 for thread-safe updates (f64 bits).
+    #[serde(skip)]
+    pub(crate) alert_threshold: AtomicU64,
     /// Default per-agent hourly token limit override. When set (> 0), all agents
     /// will be overridden to this value. Set to 0 to keep each agent's own limit.
     /// Use this to globally raise or lower the token budget for all agents.
-    pub default_max_llm_tokens_per_hour: u64,
+    /// Stored as atomic u64 for thread-safe updates.
+    #[serde(skip)]
+    pub(crate) default_max_llm_tokens_per_hour: AtomicU64,
+}
+
+impl Clone for BudgetConfig {
+    fn clone(&self) -> Self {
+        Self {
+            max_hourly_usd: AtomicU64::new(self.max_hourly_usd.load(Ordering::Relaxed)),
+            max_daily_usd: AtomicU64::new(self.max_daily_usd.load(Ordering::Relaxed)),
+            max_monthly_usd: AtomicU64::new(self.max_monthly_usd.load(Ordering::Relaxed)),
+            alert_threshold: AtomicU64::new(self.alert_threshold.load(Ordering::Relaxed)),
+            default_max_llm_tokens_per_hour: AtomicU64::new(
+                self.default_max_llm_tokens_per_hour.load(Ordering::Relaxed),
+            ),
+        }
+    }
 }
 
 impl Default for BudgetConfig {
     fn default() -> Self {
         Self {
-            max_hourly_usd: 0.0,
-            max_daily_usd: 0.0,
-            max_monthly_usd: 0.0,
-            alert_threshold: 0.8,
-            default_max_llm_tokens_per_hour: 0,
+            max_hourly_usd: AtomicU64::new(0_f64.to_bits()),
+            max_daily_usd: AtomicU64::new(0_f64.to_bits()),
+            max_monthly_usd: AtomicU64::new(0_f64.to_bits()),
+            alert_threshold: AtomicU64::new(0.8_f64.to_bits()),
+            default_max_llm_tokens_per_hour: AtomicU64::new(0),
         }
+    }
+}
+
+impl BudgetConfig {
+    /// Get the maximum hourly budget in USD.
+    pub fn max_hourly_usd(&self) -> f64 {
+        f64::from_bits(self.max_hourly_usd.load(Ordering::Relaxed))
+    }
+
+    /// Set the maximum hourly budget in USD (thread-safe).
+    pub fn set_max_hourly_usd(&self, value: f64) {
+        self.max_hourly_usd
+            .store(value.to_bits(), Ordering::Relaxed);
+    }
+
+    /// Get the maximum daily budget in USD.
+    pub fn max_daily_usd(&self) -> f64 {
+        f64::from_bits(self.max_daily_usd.load(Ordering::Relaxed))
+    }
+
+    /// Set the maximum daily budget in USD (thread-safe).
+    pub fn set_max_daily_usd(&self, value: f64) {
+        self.max_daily_usd.store(value.to_bits(), Ordering::Relaxed);
+    }
+
+    /// Get the maximum monthly budget in USD.
+    pub fn max_monthly_usd(&self) -> f64 {
+        f64::from_bits(self.max_monthly_usd.load(Ordering::Relaxed))
+    }
+
+    /// Set the maximum monthly budget in USD (thread-safe).
+    pub fn set_max_monthly_usd(&self, value: f64) {
+        self.max_monthly_usd
+            .store(value.to_bits(), Ordering::Relaxed);
+    }
+
+    /// Get the alert threshold (0.0 - 1.0).
+    pub fn alert_threshold(&self) -> f64 {
+        f64::from_bits(self.alert_threshold.load(Ordering::Relaxed))
+    }
+
+    /// Set the alert threshold (thread-safe).
+    pub fn set_alert_threshold(&self, value: f64) {
+        self.alert_threshold
+            .store(value.to_bits(), Ordering::Relaxed);
+    }
+
+    /// Get the default max LLM tokens per hour.
+    pub fn default_max_llm_tokens_per_hour(&self) -> u64 {
+        self.default_max_llm_tokens_per_hour.load(Ordering::Relaxed)
+    }
+
+    /// Set the default max LLM tokens per hour (thread-safe).
+    pub fn set_default_max_llm_tokens_per_hour(&self, value: u64) {
+        self.default_max_llm_tokens_per_hour
+            .store(value, Ordering::Relaxed);
     }
 }
 
@@ -3732,10 +3814,7 @@ mod tests {
             }],
         );
         // Auth profiles take precedence over convention (but not explicit mapping)
-        assert_eq!(
-            config.resolve_api_key_env("nvidia"),
-            "NVIDIA_PRIMARY_KEY"
-        );
+        assert_eq!(config.resolve_api_key_env("nvidia"), "NVIDIA_PRIMARY_KEY");
     }
 
     #[test]

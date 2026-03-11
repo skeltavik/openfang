@@ -66,32 +66,35 @@ impl MeteringEngine {
         &self,
         budget: &openfang_types::config::BudgetConfig,
     ) -> OpenFangResult<()> {
-        if budget.max_hourly_usd > 0.0 {
+        if budget.max_hourly_usd() > 0.0 {
             let cost = self.store.query_global_hourly()?;
-            if cost >= budget.max_hourly_usd {
+            if cost >= budget.max_hourly_usd() {
                 return Err(OpenFangError::QuotaExceeded(format!(
                     "Global hourly budget exceeded: ${:.4} / ${:.4}",
-                    cost, budget.max_hourly_usd
+                    cost,
+                    budget.max_hourly_usd()
                 )));
             }
         }
 
-        if budget.max_daily_usd > 0.0 {
+        if budget.max_daily_usd() > 0.0 {
             let cost = self.store.query_today_cost()?;
-            if cost >= budget.max_daily_usd {
+            if cost >= budget.max_daily_usd() {
                 return Err(OpenFangError::QuotaExceeded(format!(
                     "Global daily budget exceeded: ${:.4} / ${:.4}",
-                    cost, budget.max_daily_usd
+                    cost,
+                    budget.max_daily_usd()
                 )));
             }
         }
 
-        if budget.max_monthly_usd > 0.0 {
+        if budget.max_monthly_usd() > 0.0 {
             let cost = self.store.query_global_monthly()?;
-            if cost >= budget.max_monthly_usd {
+            if cost >= budget.max_monthly_usd() {
                 return Err(OpenFangError::QuotaExceeded(format!(
                     "Global monthly budget exceeded: ${:.4} / ${:.4}",
-                    cost, budget.max_monthly_usd
+                    cost,
+                    budget.max_monthly_usd()
                 )));
             }
         }
@@ -107,28 +110,28 @@ impl MeteringEngine {
 
         BudgetStatus {
             hourly_spend: hourly,
-            hourly_limit: budget.max_hourly_usd,
-            hourly_pct: if budget.max_hourly_usd > 0.0 {
-                hourly / budget.max_hourly_usd
+            hourly_limit: budget.max_hourly_usd(),
+            hourly_pct: if budget.max_hourly_usd() > 0.0 {
+                hourly / budget.max_hourly_usd()
             } else {
                 0.0
             },
             daily_spend: daily,
-            daily_limit: budget.max_daily_usd,
-            daily_pct: if budget.max_daily_usd > 0.0 {
-                daily / budget.max_daily_usd
+            daily_limit: budget.max_daily_usd(),
+            daily_pct: if budget.max_daily_usd() > 0.0 {
+                daily / budget.max_daily_usd()
             } else {
                 0.0
             },
             monthly_spend: monthly,
-            monthly_limit: budget.max_monthly_usd,
-            monthly_pct: if budget.max_monthly_usd > 0.0 {
-                monthly / budget.max_monthly_usd
+            monthly_limit: budget.max_monthly_usd(),
+            monthly_pct: if budget.max_monthly_usd() > 0.0 {
+                monthly / budget.max_monthly_usd()
             } else {
                 0.0
             },
-            alert_threshold: budget.alert_threshold,
-            default_max_llm_tokens_per_hour: budget.default_max_llm_tokens_per_hour,
+            alert_threshold: budget.alert_threshold(),
+            default_max_llm_tokens_per_hour: budget.default_max_llm_tokens_per_hour(),
         }
     }
 

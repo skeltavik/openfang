@@ -4547,7 +4547,7 @@ pub async fn network_status(State(state): State<Arc<AppState>>) -> impl IntoResp
         && !state.kernel.config.network.shared_secret.is_empty();
 
     let (node_id, listen_address, connected_peers, total_peers) =
-        if let Some(ref peer_node) = state.kernel.peer_node {
+        if let Some(peer_node) = state.kernel.peer_node.get() {
             let registry = peer_node.registry();
             (
                 peer_node.node_id().to_string(),
@@ -4740,28 +4740,21 @@ pub async fn update_budget(
     State(state): State<Arc<AppState>>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    // SAFETY: Budget config is updated in-place. Since KernelConfig is behind
-    // an Arc and we only have &self, we use ptr mutation (same pattern as OFP).
-    let config_ptr = &state.kernel.config as *const openfang_types::config::KernelConfig
-        as *mut openfang_types::config::KernelConfig;
-
-    // Apply updates
-    unsafe {
-        if let Some(v) = body["max_hourly_usd"].as_f64() {
-            (*config_ptr).budget.max_hourly_usd = v;
-        }
-        if let Some(v) = body["max_daily_usd"].as_f64() {
-            (*config_ptr).budget.max_daily_usd = v;
-        }
-        if let Some(v) = body["max_monthly_usd"].as_f64() {
-            (*config_ptr).budget.max_monthly_usd = v;
-        }
-        if let Some(v) = body["alert_threshold"].as_f64() {
-            (*config_ptr).budget.alert_threshold = v.clamp(0.0, 1.0);
-        }
-        if let Some(v) = body["default_max_llm_tokens_per_hour"].as_u64() {
-            (*config_ptr).budget.default_max_llm_tokens_per_hour = v;
-        }
+    // Apply updates using thread-safe atomic operations
+    if let Some(v) = body["max_hourly_usd"].as_f64() {
+        state.kernel.config.budget.set_max_hourly_usd(v);
+    }
+    if let Some(v) = body["max_daily_usd"].as_f64() {
+        state.kernel.config.budget.set_max_daily_usd(v);
+    }
+    if let Some(v) = body["max_monthly_usd"].as_f64() {
+        state.kernel.config.budget.set_max_monthly_usd(v);
+    }
+    if let Some(v) = body["alert_threshold"].as_f64() {
+        state.kernel.config.budget.set_alert_threshold(v.clamp(0.0, 1.0));
+    }
+    if let Some(v) = body["default_max_llm_tokens_per_hour"].as_u64() {
+        state.kernel.config.budget.set_default_max_llm_tokens_per_hour(v);
     }
 
     let status = state

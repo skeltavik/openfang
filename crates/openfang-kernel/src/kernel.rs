@@ -140,9 +140,11 @@ pub struct OpenFangKernel {
     /// Persistent process manager for interactive sessions (REPLs, servers).
     pub process_manager: Arc<openfang_runtime::process_manager::ProcessManager>,
     /// OFP peer registry — tracks connected peers.
-    pub peer_registry: Option<openfang_wire::PeerRegistry>,
+    /// Uses OnceLock for safe initialization after Arc creation.
+    pub peer_registry: OnceLock<openfang_wire::PeerRegistry>,
     /// OFP peer node — the local networking node.
-    pub peer_node: Option<Arc<openfang_wire::PeerNode>>,
+    /// Uses OnceLock for safe initialization after Arc creation.
+    pub peer_node: OnceLock<Arc<openfang_wire::PeerNode>>,
     /// Boot timestamp for uptime calculation.
     pub booted_at: std::time::Instant,
     /// WhatsApp Web gateway child process PID (for shutdown cleanup).
@@ -990,8 +992,8 @@ impl OpenFangKernel {
             auto_reply_engine,
             hooks: openfang_runtime::hooks::HookRegistry::new(),
             process_manager: Arc::new(openfang_runtime::process_manager::ProcessManager::new(5)),
-            peer_registry: None,
-            peer_node: None,
+            peer_registry: OnceLock::new(),
+            peer_node: OnceLock::new(),
             booted_at: std::time::Instant::now(),
             whatsapp_gateway_pid: Arc::new(std::sync::Mutex::new(None)),
             channel_adapters: dashmap::DashMap::new(),
@@ -3849,14 +3851,10 @@ impl OpenFangKernel {
                     "OFP peer node started"
                 );
 
-                // SAFETY: These fields are only written once during startup.
-                // We use unsafe to set them because start_background_agents runs
-                // after the Arc is created and the kernel is otherwise immutable.
-                let self_ptr = Arc::as_ptr(self) as *mut OpenFangKernel;
-                unsafe {
-                    (*self_ptr).peer_registry = Some(registry.clone());
-                    (*self_ptr).peer_node = Some(node.clone());
-                }
+                // Initialize peer fields using OnceLock for thread-safe one-time initialization.
+                // This avoids the unsafe raw pointer mutation used previously.
+                let _ = self.peer_registry.set(registry.clone());
+                let _ = self.peer_node.set(node.clone());
 
                 // Connect to bootstrap peers
                 for peer_addr_str in &self.config.network.bootstrap_peers {
@@ -4909,21 +4907,25 @@ fn apply_budget_defaults(
     resources: &mut ResourceQuota,
 ) {
     // Only override hourly if agent has unlimited (0.0) and global is set
-    if budget.max_hourly_usd > 0.0 && resources.max_cost_per_hour_usd == 0.0 {
-        resources.max_cost_per_hour_usd = budget.max_hourly_usd;
+    let max_hourly = budget.max_hourly_usd();
+    if max_hourly > 0.0 && resources.max_cost_per_hour_usd == 0.0 {
+        resources.max_cost_per_hour_usd = max_hourly;
     }
     // Only override daily/monthly if agent has unlimited (0.0) and global is set
-    if budget.max_daily_usd > 0.0 && resources.max_cost_per_day_usd == 0.0 {
-        resources.max_cost_per_day_usd = budget.max_daily_usd;
+    let max_daily = budget.max_daily_usd();
+    if max_daily > 0.0 && resources.max_cost_per_day_usd == 0.0 {
+        resources.max_cost_per_day_usd = max_daily;
     }
-    if budget.max_monthly_usd > 0.0 && resources.max_cost_per_month_usd == 0.0 {
-        resources.max_cost_per_month_usd = budget.max_monthly_usd;
+    let max_monthly = budget.max_monthly_usd();
+    if max_monthly > 0.0 && resources.max_cost_per_month_usd == 0.0 {
+        resources.max_cost_per_month_usd = max_monthly;
     }
     // Override per-agent hourly token limit when the global default is set.
     // This lets users raise (or lower) the token budget for all agents at once
     // via config.toml [budget] default_max_llm_tokens_per_hour = 10000000
-    if budget.default_max_llm_tokens_per_hour > 0 {
-        resources.max_llm_tokens_per_hour = budget.default_max_llm_tokens_per_hour;
+    let default_tokens = budget.default_max_llm_tokens_per_hour();
+    if default_tokens > 0 {
+        resources.max_llm_tokens_per_hour = default_tokens;
     }
 }
 
